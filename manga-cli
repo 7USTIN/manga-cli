@@ -3,7 +3,7 @@
 version="1.0.0"
 old_ifs="${IFS}"
 cache_dir="${HOME}/.cache/manga-cli"
-dependencies=("cat" "curl" "sed" "awk" "tr" "du" "git" "diff" "patch" "convert" "zathura")
+dependencies=("cat" "curl" "sed" "awk" "tr" "du" "git" "diff" "patch" "convert" "zathura" "zathura-pdf-mupdf")
 github_source="https://raw.githubusercontent.com/7USTIN/manga-cli/master/manga-cli"
 
 # Text colors
@@ -479,3 +479,4 @@ case "${1}" in
 		manga_title_input="${*}"
 		main
 esac
+
