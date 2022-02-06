@@ -54,3 +54,4 @@ sudo cp manga-cli /usr/local/bin/manga-cli
 - patch
 - convert
 - zathura
+- zathura-pdf-mupdf
