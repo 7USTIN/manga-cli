@@ -499,3 +499,4 @@ case "${1}" in
 		manga_title_input="${*}"
 		main
 esac
+
