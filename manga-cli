@@ -214,8 +214,8 @@ scrape_mangas() {
 	
 	scraped_results=$(
 		curl --silent "https://manganato.com/search/story/${search_query}" | # Scrape URL
-		sed --silent '/panel-search-story/,$p' | # Delete text before 'panel-search-story'
-		sed --silent '/clear: both/q;p' # Delete text after 'clear: both'
+		sed -n '/panel-search-story/,$p' | # Delete text before 'panel-search-story'
+		sed -n '/clear: both/q;p' # Delete text after 'clear: both'
 	)
 	
 	IFS=$'\n'
@@ -258,8 +258,8 @@ scrape_chapter_list() {
 	# Get chapter URLs in reversed order
 	rev_chapter_urls=($(
 		curl --silent "${manga_url}" | # Scrape URL
-		sed --silent '/row-content-chapter/,$p' | # Delete text before 'row-content-chapter'
-		sed --silent '/<\/ul>/q;p' | # Delete text after '</ul>'
+		sed -n '/row-content-chapter/,$p' | # Delete text before 'row-content-chapter'
+		sed -n '/<\/ul>/q;p' | # Delete text after '</ul>'
 		awk 'BEGIN{RS="\" title="; FS="<a rel=\"nofollow\" class=\"chapter-name text-nowrap\" href=\""}NF>1{print $NF}' # Get URLs from HTML 'href' attribute
 	))
 
@@ -297,8 +297,8 @@ scrape_chapter() {
 
 		chapter_image_urls=($(
 			curl --silent "${chapter_url}" | # Scrape URL
-			sed --silent '/container-chapter-reader/,$p' | # Delete text before 'container-chapter-reader'
-			sed --silent '/max-height: 380px/q;p' | # Delete text after 'max-height: 380px'
+			sed -n '/container-chapter-reader/,$p' | # Delete text before 'container-chapter-reader'
+			sed -n '/max-height: 380px/q;p' | # Delete text after 'max-height: 380px'
 			awk 'BEGIN{RS="\" alt="; FS="src=\""}NF>1{print $NF}' # Get image URLs from HTML 'src' attribute
 		))
 
@@ -422,9 +422,9 @@ convert_imgs_to_pdf() {
 		print_blue "Converting images to PDF..."
 
 		if [[ "${python_cmd_prefix}" == "true" ]]; then
-			python3 -m img2pdf $(ls -v ${image_dir}/*.jpg) --output "${pdf_dir}"
+			python3 -m img2pdf $(ls ${image_dir}/*.jpg | sort -V) --output "${pdf_dir}"
 		else
-			img2pdf $(ls -v ${image_dir}/*.jpg) --output "${pdf_dir}"
+			img2pdf $(ls ${image_dir}/*.jpg | sort -V) --output "${pdf_dir}"
 		fi
 
 		rm -r "${image_dir:?}/"
