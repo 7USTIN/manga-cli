@@ -76,7 +76,18 @@ show_version() {
 	print_green "Version: ${version}"
 }
 
-open_pdf() { # Open PDF using Zathura and run it in the background
+open_pdf() { 
+	if [[ -n "${reader}" ]]; then
+		if [[ -f "${pdf_dir}" ]]; then 
+			eval "${reader} ${pdf_dir}"
+		else
+			eval "${reader} ${image_dir}/*.jpg"
+		fi
+
+		return $?
+	fi
+
+	# Fallback to Zathura
 	if [[ "${zathura_auto_fullscreen}" == "true" ]]; then
 		zathura --page=1 --mode="fullscreen" "${pdf_dir}" &
 	else
@@ -523,6 +534,10 @@ while [[ "${1}" ]]; do
 		-i|--image-output)
 			pdf_output=false
 			;;
+		-r|--reader)
+			reader="$2"
+			shift
+			;;
 		*)	
 			show_help
 			exit 1
@@ -532,7 +547,7 @@ while [[ "${1}" ]]; do
 	shift
 done
 
-if [[ "${download_only}" != "true" ]]; then
+if [[ "${download_only}" != "true" && -z "${reader}" ]]; then
 	check_dependencies "${read_dependencies[@]}"
 fi
 
