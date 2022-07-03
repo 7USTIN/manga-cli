@@ -325,12 +325,18 @@ scrape_chapter() {
 		for image_src in "${chapter_image_urls[@]}"; do
 			((i=i + 1))
 
+			local image_name="${image_dir}/${i}.jpg" 
+
+			if [[ -f "${image_name}" ]]; then 
+				continue
+			fi
+
 			# Download image in the background
 			curl \
 				--silent \
 				--create-dirs \
 				--header 'Referer: https://readmanganato.com/' \
-				--output "${image_dir}/${i}.jpg" \
+				--output "${image_name}" \
 				"${image_src}" &
 		done
 
