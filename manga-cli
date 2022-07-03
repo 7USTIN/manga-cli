@@ -34,7 +34,8 @@ print_list_item() { # Print text in blue (${1}) and the default color (${2})
 
 prompt() { 
 	# Print text in green (${1}) and blue (${2}) 
-	printf "${green}%s${no_color} ${blue}%s${no_color}" "${1}" "${2}"
+	# Redirect to tty so it still prints even when called from a function who's output is captured as variable
+	printf "${green}%s${no_color} ${blue}%s${no_color}" "${1}" "${2}" >/dev/tty
 
 	# Prompt user and save user input to the variable 'reply'
 	read -r reply 
@@ -185,22 +186,22 @@ select_manga() {
 }
 
 select_chapter() {
-	printf "\e[1A\e[\\" # Delete last line
+	local chapter_num
 
 	if [[ ${chapter_count} -gt 1 ]]; then
 		prompt "Select chapter" "[1-${chapter_count}]: "
-		selected_chapter_num=${reply}
+		chapter_num=${reply}
 	else
 		print_green "Selected first chapter"	
-		selected_chapter_num=1
+		chapter_num=1
 	fi
 
-	check_number_input "1" "${chapter_count}" "${selected_chapter_num}"
+	check_number_input "1" "${chapter_count}" "${chapter_num}"
 
 	if [[ "${?}" == "0" ]]; then
 		select_chapter
 	else
-		chapter_url="${chapter_urls[${selected_chapter_num} - 1]}"
+		printf "%s\n" "${chapter_num}"
 	fi
 }
 
@@ -280,18 +281,20 @@ scrape_chapter_list() {
 }
 
 scrape_chapter() {
+	local chapter_url="$1"
+	local chapter_num="$2"
 	if [[ -z "${mod_manga_title}" ]]; then
 		manga_title="${result_titles[${selected_manga_num} - 1]}"
 		mod_manga_title="$(printf "%s" "${manga_title}" | tr " " "_")" # Replace spaces with underscores
 	fi
 
-	image_dir="${cache_dir}/${mod_manga_title}/chapter_${selected_chapter_num}"
-	pdf_dir="${cache_dir}/${mod_manga_title}/chapter_${selected_chapter_num}.pdf"
+	image_dir="${cache_dir}/${mod_manga_title}/chapter_${chapter_num}"
+	pdf_dir="${cache_dir}/${mod_manga_title}/chapter_${chapter_num}.pdf"
 	
 	clear
  
 	if [[ ! -f "${pdf_dir}" ]]; then # If PDF file does not exist
-		print_green "Fetching chapter ${selected_chapter_num}..."
+		print_green "Fetching chapter ${chapter_num}..."
 
 		IFS=$'\n'
 
@@ -359,25 +362,29 @@ input_controls() {
 	prompt "Enter input:"
 	user_input="$(printf "%s" "${reply}" | tr "[:upper:]" "[:lower:]")"
 
+	local chapter_url
 	case "${user_input}" in
 		n)
 			if [[ ${selected_chapter_num} -lt ${chapter_count} ]]; then
 				((selected_chapter_num=selected_chapter_num + 1))
 				chapter_url="${chapter_urls[${selected_chapter_num} - 1]}"
-				open_chapter
+				open_chapter "${chapter_url}" "${selected_chapter_num}"
 			fi
 			;;
 		p)
 			if [[ ${selected_chapter_num} -gt 1 ]]; then	
 				((selected_chapter_num=selected_chapter_num - 1))
 				chapter_url="${chapter_urls[${selected_chapter_num} - 1]}"
-				open_chapter
+				open_chapter "${chapter_url}" "${selected_chapter_num}"
 			fi
 			;;
 		s)
 			if [[ ${chapter_count} -gt 1 ]]; then
-				select_chapter
-				open_chapter
+				local chapter_num="$(select_chapter)"
+				local chapter_url="${chapter_urls[${chapter_num} - 1]}"
+				selected_chapter_num="${chapter_num}"
+
+				open_chapter "${chapter_url}" "${chapter_num}"
 			fi
 			;;
 		r)
@@ -433,7 +440,9 @@ convert_imgs_to_pdf() {
 }
 
 open_chapter() {
-	scrape_chapter
+	local chapter_url="$1"
+	local chapter_num="$2"
+	scrape_chapter "${chapter_url}" "${chapter_num}"
 	convert_imgs_to_pdf
 	open_pdf
 	cache_session
@@ -470,8 +479,11 @@ main() {
 	scrape_mangas
 	select_manga
 	scrape_chapter_list
-	select_chapter
-	open_chapter
+
+	local chapter_num="$(select_chapter)"
+	local chapter_url="${chapter_urls[${chapter_num} - 1]}"
+	selected_chapter_num="${chapter_num}"
+	open_chapter "${chapter_url}" "${chapter_num}"
 	input_controls
 }
 
@@ -514,7 +526,7 @@ while [[ "${1}" ]]; do
 done
 
 if [[ "${open_last_session}" == "true" ]]; then
-	open_chapter
+	open_chapter "${chapter_url}" "${selected_chapter_num}"
 	input_controls
 else 
 	main
