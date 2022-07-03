@@ -4,9 +4,10 @@ version="1.0.5"
 old_ifs="${IFS}"
 cache_dir="${HOME}/.cache/manga-cli"
 
-base_dependencies=("ls" "cat" "curl" "sed" "awk" "tr" "du" "rm" "mkdir" "git" "diff" "patch")
+base_dependencies=("ls" "cat" "curl" "sed" "awk" "tr" "du" "rm" "mkdir")
 pdf_dependencies=("img2pdf")
 read_dependencies=("zathura")
+update_dependencies=("diff" "patch")
 
 github_source="https://raw.githubusercontent.com/7USTIN/manga-cli/master/manga-cli"
 
@@ -516,6 +517,7 @@ while [[ "${1}" ]]; do
 			exit 0
 			;;
 		-u|--update)
+			check_dependencies "${update_dependencies[@]}"
 			update_script
 			exit 0
 			;;
