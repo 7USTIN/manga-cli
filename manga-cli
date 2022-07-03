@@ -69,6 +69,9 @@ show_help() {
 	  -l, --last-session	Open last session
 	  -c, --cache-size	Print cache size (${cache_dir})
 	  -C, --clear-cache	Clear cache (${cache_dir})
+	  -d, --download cache  Downloads the manga. Doesn't tries to read it
+	  -i, --image-output    Saves the manga as image without converting to pdf
+	  -r, --reader COMMAND  Runs COMMAND with the path to the pdf/images when trying to read the manga
 
 	EOF
 }
