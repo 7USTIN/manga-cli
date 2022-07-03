@@ -3,7 +3,11 @@
 version="1.0.5"
 old_ifs="${IFS}"
 cache_dir="${HOME}/.cache/manga-cli"
-dependencies=("ls" "cat" "curl" "sed" "awk" "tr" "du" "rm" "mkdir" "git" "diff" "patch" "img2pdf" "zathura")
+
+base_dependencies=("ls" "cat" "curl" "sed" "awk" "tr" "du" "rm" "mkdir" "git" "diff" "patch")
+pdf_dependencies=("img2pdf")
+read_dependencies=("zathura")
+
 github_source="https://raw.githubusercontent.com/7USTIN/manga-cli/master/manga-cli"
 
 # Text colors
@@ -434,12 +438,21 @@ convert_imgs_to_pdf() {
 
 open_chapter() {
 	scrape_chapter
-	convert_imgs_to_pdf
+
+	if [[ "${pdf_output}" == "true" ]]; then
+		convert_imgs_to_pdf
+	fi
+
+	if [[ "${download_only}" == "true" ]]; then
+		return 
+	fi
+
 	open_pdf
 	cache_session
 }
 
 check_dependencies() {
+	local dependencies=("$@")
 	for dependency in "${dependencies[@]}"; do
 		if ! command -v "${dependency}" &> /dev/null; then
 			if ! pip3 show "${dependency}" &> /dev/null; then
@@ -463,7 +476,7 @@ check_dependencies() {
 # Call 'reset_ifs' function when exiting script
 trap reset_ifs EXIT
 
-check_dependencies
+check_dependencies "${base_dependencies[@]}"
 
 main() {
 	search_manga
@@ -504,6 +517,12 @@ while [[ "${1}" ]]; do
 			clear_cache
 			exit 0
 			;;
+		-d|--download)
+			download_only=true
+			;;
+		-i|--image-output)
+			pdf_output=false
+			;;
 		*)	
 			show_help
 			exit 1
@@ -512,6 +531,14 @@ while [[ "${1}" ]]; do
 
 	shift
 done
+
+if [[ "${download_only}" != "true" ]]; then
+	check_dependencies "${read_dependencies[@]}"
+fi
+
+if [[ "${pdf_output}" != "false" ]]; then
+	check_dependencies "${pdf_dependencies[@]}"
+fi
 
 if [[ "${open_last_session}" == "true" ]]; then
 	open_chapter
