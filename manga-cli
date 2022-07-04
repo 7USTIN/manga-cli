@@ -3,7 +3,12 @@
 version="1.0.5"
 old_ifs="${IFS}"
 cache_dir="${HOME}/.cache/manga-cli"
-dependencies=("ls" "cat" "curl" "sed" "awk" "tr" "du" "rm" "mkdir" "git" "diff" "patch" "img2pdf" "zathura")
+
+base_dependencies=("ls" "cat" "curl" "sed" "awk" "tr" "du" "rm" "mkdir" "cut")
+pdf_dependencies=("img2pdf")
+read_dependencies=("zathura")
+update_dependencies=("diff" "patch")
+
 github_source="https://raw.githubusercontent.com/7USTIN/manga-cli/master/manga-cli"
 
 # Text colors
@@ -34,7 +39,8 @@ print_list_item() { # Print text in blue (${1}) and the default color (${2})
 
 prompt() { 
 	# Print text in green (${1}) and blue (${2}) 
-	printf "${green}%s${no_color} ${blue}%s${no_color}" "${1}" "${2}"
+	# Redirect to tty so it still prints even when called from a function who's output is captured as variable
+	printf "${green}%s${no_color} ${blue}%s${no_color}" "${1}" "${2}" >/dev/tty
 
 	# Prompt user and save user input to the variable 'reply'
 	read -r reply 
@@ -64,6 +70,9 @@ show_help() {
 	  -l, --last-session	Open last session
 	  -c, --cache-size	Print cache size (${cache_dir})
 	  -C, --clear-cache	Clear cache (${cache_dir})
+	  -d, --download cache  Downloads the manga. Doesn't tries to read it
+	  -i, --image-output    Saves the manga as image without converting to pdf
+	  -r, --reader COMMAND  Runs COMMAND with the path to the pdf/images when trying to read the manga
 
 	EOF
 }
@@ -72,7 +81,19 @@ show_version() {
 	print_green "Version: ${version}"
 }
 
-open_pdf() { # Open PDF using Zathura and run it in the background
+open_pdf() { 
+	if [[ -n "${reader}" ]]; then
+		if [[ -f "${pdf_dir}" ]]; then 
+			eval "${reader} ${pdf_dir}"
+		else
+			local offset=$(("${#image_dir}"+2)) # +1 from / and +1 due to 1-indexing
+			eval "${reader} $(ls ${image_dir}/*.jpg | sort -n -k 1.$offset | xargs )"
+		fi
+
+		return $?
+	fi
+
+	# Fallback to Zathura
 	if [[ "${zathura_auto_fullscreen}" == "true" ]]; then
 		zathura --page=1 --mode="fullscreen" "${pdf_dir}" &
 	else
@@ -91,7 +112,6 @@ check_number_input() {
 		return 1
 	else
 		print_red "Invalid selection"
-		printf "\n"
 		return 0
 	fi
 }
@@ -185,22 +205,47 @@ select_manga() {
 }
 
 select_chapter() {
-	printf "\e[1A\e[\\" # Delete last line
+	local chapter_start chapter_end
 
 	if [[ ${chapter_count} -gt 1 ]]; then
-		prompt "Select chapter" "[1-${chapter_count}]: "
-		selected_chapter_num=${reply}
+		if [[ "${download_only}" == "true" ]]; then
+			printf "(Use START STOP to specify a range. Use negative to specify chapters from the back, eg -1 for the last chapter.)\n" >/dev/tty
+			prompt "Select chapter" "[1-${chapter_count}]: "
+		else
+			prompt "Select chapter" "[1-${chapter_count}]: "
+		fi
+
+		IFS=" "
+
+		nums=($reply)
+
+		if (( "${#nums[@]}" == 1 )); then
+				chapter_start=${nums[0]}
+				chapter_end=${nums[0]}
+		elif [[ "${#nums[@]}" -eq 2 && "${download_only}" == "true" ]]; then
+				chapter_start=${nums[0]}
+				chapter_end=${nums[1]}
+		else
+				print_red "Invalid selection"
+				select_chapter
+		fi
+
 	else
 		print_green "Selected first chapter"	
-		selected_chapter_num=1
+		chapter_start=1
+		chapter_end=1
 	fi
 
-	check_number_input "1" "${chapter_count}" "${selected_chapter_num}"
+	(( "${chapter_start}" < 0 )) && chapter_start=$(( "${chapter_count}" + "${chapter_start}" + 1 ))
+	(( "${chapter_end}" < 0 )) && chapter_end=$(( "${chapter_count}" + "${chapter_end}" + 1 ))
+
+	check_number_input "1" "${chapter_count}" "${chapter_start}"
+	check_number_input "${chapter_start}" "${chapter_count}" "${chapter_end}"
 
 	if [[ "${?}" == "0" ]]; then
 		select_chapter
 	else
-		chapter_url="${chapter_urls[${selected_chapter_num} - 1]}"
+		printf "%s %s\n" "${chapter_start}" "${chapter_end}"
 	fi
 }
 
@@ -280,18 +325,20 @@ scrape_chapter_list() {
 }
 
 scrape_chapter() {
+	local chapter_url="$1"
+	local chapter_num="$2"
 	if [[ -z "${mod_manga_title}" ]]; then
 		manga_title="${result_titles[${selected_manga_num} - 1]}"
 		mod_manga_title="$(printf "%s" "${manga_title}" | tr " " "_")" # Replace spaces with underscores
 	fi
 
-	image_dir="${cache_dir}/${mod_manga_title}/chapter_${selected_chapter_num}"
-	pdf_dir="${cache_dir}/${mod_manga_title}/chapter_${selected_chapter_num}.pdf"
+	image_dir="${cache_dir}/${mod_manga_title}/chapter_${chapter_num}"
+	pdf_dir="${cache_dir}/${mod_manga_title}/chapter_${chapter_num}.pdf"
 	
 	clear
  
 	if [[ ! -f "${pdf_dir}" ]]; then # If PDF file does not exist
-		print_green "Fetching chapter ${selected_chapter_num}..."
+		print_green "Fetching chapter ${chapter_num}..."
 
 		IFS=$'\n'
 
@@ -310,12 +357,18 @@ scrape_chapter() {
 		for image_src in "${chapter_image_urls[@]}"; do
 			((i=i + 1))
 
+			local image_name="${image_dir}/${i}.jpg" 
+
+			if [[ -f "${image_name}" ]]; then 
+				continue
+			fi
+
 			# Download image in the background
 			curl \
 				--silent \
 				--create-dirs \
 				--header 'Referer: https://readmanganato.com/' \
-				--output "${image_dir}/${i}.jpg" \
+				--output "${image_name}" \
 				"${image_src}" &
 		done
 
@@ -359,25 +412,36 @@ input_controls() {
 	prompt "Enter input:"
 	user_input="$(printf "%s" "${reply}" | tr "[:upper:]" "[:lower:]")"
 
+	local chapter_url
 	case "${user_input}" in
 		n)
 			if [[ ${selected_chapter_num} -lt ${chapter_count} ]]; then
 				((selected_chapter_num=selected_chapter_num + 1))
 				chapter_url="${chapter_urls[${selected_chapter_num} - 1]}"
-				open_chapter
+				open_chapter "${chapter_url}" "${selected_chapter_num}"
 			fi
 			;;
 		p)
 			if [[ ${selected_chapter_num} -gt 1 ]]; then	
 				((selected_chapter_num=selected_chapter_num - 1))
 				chapter_url="${chapter_urls[${selected_chapter_num} - 1]}"
-				open_chapter
+				open_chapter "${chapter_url}" "${selected_chapter_num}"
 			fi
 			;;
 		s)
 			if [[ ${chapter_count} -gt 1 ]]; then
-				select_chapter
-				open_chapter
+				local nums="$(select_chapter)"
+				local chapter_start=$(cut -d' ' -f1 <<< "${nums}")
+				local chapter_end=$(cut -d' ' -f2 <<< "${nums}")
+				selected_chapter_num="${chapter_end}"
+
+				local chapter_num chapter_url
+
+				for (( chapter_num=$chapter_start; chapter_num<=$chapter_end; ++chapter_num ))
+				do
+					chapter_url="${chapter_urls[${chapter_num} - 1]}"
+					open_chapter "${chapter_url}" "${chapter_num}"
+				done
 			fi
 			;;
 		r)
@@ -433,13 +497,24 @@ convert_imgs_to_pdf() {
 }
 
 open_chapter() {
-	scrape_chapter
-	convert_imgs_to_pdf
+	local chapter_url="$1"
+	local chapter_num="$2"
+	scrape_chapter "${chapter_url}" "${chapter_num}"
+
+	if [[ "${pdf_output}" == "true" ]]; then
+		convert_imgs_to_pdf
+	fi
+
+	if [[ "${download_only}" == "true" ]]; then
+		return 
+	fi
+
 	open_pdf
 	cache_session
 }
 
 check_dependencies() {
+	local dependencies=("$@")
 	for dependency in "${dependencies[@]}"; do
 		if ! command -v "${dependency}" &> /dev/null; then
 			if ! pip3 show "${dependency}" &> /dev/null; then
@@ -463,15 +538,27 @@ check_dependencies() {
 # Call 'reset_ifs' function when exiting script
 trap reset_ifs EXIT
 
-check_dependencies
+check_dependencies "${base_dependencies[@]}"
 
 main() {
 	search_manga
 	scrape_mangas
 	select_manga
 	scrape_chapter_list
-	select_chapter
-	open_chapter
+
+	local nums="$(select_chapter)"
+	local chapter_start=$(cut -d' ' -f1 <<< "${nums}")
+	local chapter_end=$(cut -d' ' -f2 <<< "${nums}")
+	selected_chapter_num="${chapter_end}"
+
+	local chapter_num chapter_url
+
+	for (( chapter_num=$chapter_start; chapter_num<=$chapter_end; ++chapter_num ))
+	do
+		chapter_url="${chapter_urls[${chapter_num} - 1]}"
+		open_chapter "${chapter_url}" "${chapter_num}"
+	done
+
 	input_controls
 }
 
@@ -486,6 +573,7 @@ while [[ "${1}" ]]; do
 			exit 0
 			;;
 		-u|--update)
+			check_dependencies "${update_dependencies[@]}"
 			update_script
 			exit 0
 			;;
@@ -504,6 +592,16 @@ while [[ "${1}" ]]; do
 			clear_cache
 			exit 0
 			;;
+		-d|--download)
+			download_only=true
+			;;
+		-i|--image-output)
+			pdf_output=false
+			;;
+		-r|--reader)
+			reader="$2"
+			shift
+			;;
 		*)	
 			show_help
 			exit 1
@@ -513,8 +611,21 @@ while [[ "${1}" ]]; do
 	shift
 done
 
+if [[ "${download_only}" == "true" && -n "${reader}" ]]; then
+	print_red "-d,--download-only is not compatible with -r,--reader"
+	exit 1
+fi
+
+if [[ "${download_only}" != "true" && -z "${reader}" ]]; then
+	check_dependencies "${read_dependencies[@]}"
+fi
+
+if [[ "${pdf_output}" != "false" ]]; then
+	check_dependencies "${pdf_dependencies[@]}"
+fi
+
 if [[ "${open_last_session}" == "true" ]]; then
-	open_chapter
+	open_chapter "${chapter_url}" "${selected_chapter_num}"
 	input_controls
 else 
 	main

@@ -29,6 +29,9 @@ Options:
 	-l, --last-session    	Open last session
 	-c, --cache-size	Print cache size ($HOME/.cache/manga-cli)
 	-C, --clear-cache	Clear cache ($HOME/.cache/manga-cli)
+	-d, --download cache    Downloads the manga. Doesn't tries to read it
+	-i, --image-output      Saves the manga as image without converting to pdf
+	-r, --reader COMMAND    Runs COMMAND with the path to the pdf/images when trying to read the manga
 ```
 
 ## Install
@@ -58,13 +61,20 @@ sudo cp manga-cli /usr/local/bin/manga-cli
 
 ## Dependencies
 
+### Core dependencies
+
 - GNU coreutils (ls, tr, rm, du, cat, mkdir)
-- GNU diffutils (diff)
-- GNU patch
 - GNU gawk (awk)
 - GNU sed
 - curl
 - git
+
+### Optional dependencies 
+
+(These may not be needed depending on flags provided)
+
+- GNU diffutils (diff)
+- GNU patch
 - img2pdf
 - zathura
 - zathura-pdf-mupdf **OR** zathura-pdf-poppler
