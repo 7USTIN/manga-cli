@@ -86,7 +86,7 @@ open_pdf() {
 			eval "${reader} ${pdf_dir}"
 		else
 			local offset=$(("${#image_dir}"+2)) # +1 from / and +1 due to 1-indexing
-			eval "${reader} $(ls ${image_dir} | sort -n -k 1.$offset | xargs printf "${image_dir}/"'$1')"
+			eval "${reader} $(ls ${image_dir}/*.jpg | sort -n -k 1.$offset | xargs )"
 		fi
 
 		return $?
