@@ -209,7 +209,8 @@ select_chapter() {
 
 	if [[ ${chapter_count} -gt 1 ]]; then
 		if [[ "${download_only}" == "true" ]]; then
-			prompt "Select chapter (use START STOP to specify a range. Use -1 to specify last chapter.)" "[1-${chapter_count}]: "
+			printf "(Use START STOP to specify a range. Use negative to specify chapters from the back, eg -1 for the last chapter.)\n" >/dev/tty
+			prompt "Select chapter" "[1-${chapter_count}]: "
 		else
 			prompt "Select chapter" "[1-${chapter_count}]: "
 		fi
@@ -234,6 +235,9 @@ select_chapter() {
 		chapter_start=1
 		chapter_end=1
 	fi
+
+	(( "${chapter_start}" < 0 )) && chapter_start=$(( "${chapter_count}" + "${chapter_start}" + 1 ))
+	(( "${chapter_end}" < 0 )) && chapter_end=$(( "${chapter_count}" + "${chapter_end}" + 1 ))
 
 	check_number_input "1" "${chapter_count}" "${chapter_start}"
 	check_number_input "${chapter_start}" "${chapter_count}" "${chapter_end}"
