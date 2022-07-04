@@ -4,7 +4,7 @@ version="1.0.5"
 old_ifs="${IFS}"
 cache_dir="${HOME}/.cache/manga-cli"
 
-base_dependencies=("ls" "cat" "curl" "sed" "awk" "tr" "du" "rm" "mkdir")
+base_dependencies=("ls" "cat" "curl" "sed" "awk" "tr" "du" "rm" "mkdir" "cut")
 pdf_dependencies=("img2pdf")
 read_dependencies=("zathura")
 update_dependencies=("diff" "patch")
@@ -112,7 +112,6 @@ check_number_input() {
 		return 1
 	else
 		print_red "Invalid selection"
-		printf "\n"
 		return 0
 	fi
 }
@@ -206,22 +205,43 @@ select_manga() {
 }
 
 select_chapter() {
-	local chapter_num
+	local chapter_start chapter_end
 
 	if [[ ${chapter_count} -gt 1 ]]; then
-		prompt "Select chapter" "[1-${chapter_count}]: "
-		chapter_num=${reply}
+		if [[ "${download_only}" == "true" ]]; then
+			prompt "Select chapter (use START STOP to specify a range. Use -1 to specify last chapter.)" "[1-${chapter_count}]: "
+		else
+			prompt "Select chapter" "[1-${chapter_count}]: "
+		fi
+
+		IFS=" "
+
+		nums=($reply)
+
+		if (( "${#nums[@]}" == 1 )); then
+				chapter_start=${nums[0]}
+				chapter_end=${nums[0]}
+		elif [[ "${#nums[@]}" -eq 2 && "${download_only}" == "true" ]]; then
+				chapter_start=${nums[0]}
+				chapter_end=${nums[1]}
+		else
+				print_red "Invalid selection"
+				select_chapter
+		fi
+
 	else
 		print_green "Selected first chapter"	
-		chapter_num=1
+		chapter_start=1
+		chapter_end=1
 	fi
 
-	check_number_input "1" "${chapter_count}" "${chapter_num}"
+	check_number_input "1" "${chapter_count}" "${chapter_start}"
+	check_number_input "${chapter_start}" "${chapter_count}" "${chapter_end}"
 
 	if [[ "${?}" == "0" ]]; then
 		select_chapter
 	else
-		printf "%s\n" "${chapter_num}"
+		printf "%s %s\n" "${chapter_start}" "${chapter_end}"
 	fi
 }
 
@@ -406,11 +426,18 @@ input_controls() {
 			;;
 		s)
 			if [[ ${chapter_count} -gt 1 ]]; then
-				local chapter_num="$(select_chapter)"
-				local chapter_url="${chapter_urls[${chapter_num} - 1]}"
-				selected_chapter_num="${chapter_num}"
+				local nums="$(select_chapter)"
+				local chapter_start=$(cut -d' ' -f1 <<< "${nums}")
+				local chapter_end=$(cut -d' ' -f2 <<< "${nums}")
+				selected_chapter_num="${chapter_end}"
 
-				open_chapter "${chapter_url}" "${chapter_num}"
+				local chapter_num chapter_url
+
+				for (( chapter_num=$chapter_start; chapter_num<=$chapter_end; ++chapter_num ))
+				do
+					chapter_url="${chapter_urls[${chapter_num} - 1]}"
+					open_chapter "${chapter_url}" "${chapter_num}"
+				done
 			fi
 			;;
 		r)
@@ -515,10 +542,19 @@ main() {
 	select_manga
 	scrape_chapter_list
 
-	local chapter_num="$(select_chapter)"
-	local chapter_url="${chapter_urls[${chapter_num} - 1]}"
-	selected_chapter_num="${chapter_num}"
-	open_chapter "${chapter_url}" "${chapter_num}"
+	local nums="$(select_chapter)"
+	local chapter_start=$(cut -d' ' -f1 <<< "${nums}")
+	local chapter_end=$(cut -d' ' -f2 <<< "${nums}")
+	selected_chapter_num="${chapter_end}"
+
+	local chapter_num chapter_url
+
+	for (( chapter_num=$chapter_start; chapter_num<=$chapter_end; ++chapter_num ))
+	do
+		chapter_url="${chapter_urls[${chapter_num} - 1]}"
+		open_chapter "${chapter_url}" "${chapter_num}"
+	done
+
 	input_controls
 }
 
