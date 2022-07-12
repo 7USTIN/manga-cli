@@ -26,6 +26,8 @@ Options:
 	-V, --version		Print version number
 	-u, --update		Fetch latest version from the Github repository
 	-f, --fullscreen	Open Zathura in fullscreen mode 
+	-vv, --vertical 	Create all pdf images of the same size vertically
+	-hh, --horisontal	Create all pdf images of the same size horisontally
 	-l, --last-session    	Open last session
 	-c, --cache-size	Print cache size ($HOME/.cache/manga-cli)
 	-C, --clear-cache	Clear cache ($HOME/.cache/manga-cli)

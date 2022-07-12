@@ -61,6 +61,8 @@ show_help() {
 	  -V, --version		Print version number
 	  -u, --update		Fetch latest version from the Github repository
 	  -f, --fullscreen	Open Zathura in fullscreen mode 
+	  -vv, --vertical 	Create all pdf images of the same size vertically
+	  -hh, --horisontal	Create all pdf images of the same size horisontally
 	  -l, --last-session	Open last session
 	  -c, --cache-size	Print cache size (${cache_dir})
 	  -C, --clear-cache	Clear cache (${cache_dir})
@@ -421,11 +423,20 @@ convert_imgs_to_pdf() {
 	if [[ ! -f "${pdf_dir}" ]]; then # If PDF file does not exist
 		print_blue "Converting images to PDF..."
 
-		if [[ "${python_cmd_prefix}" == "true" ]]; then
-			python3 -m img2pdf $(ls -v ${image_dir}/*.jpg) --output "${pdf_dir}"
-		else
-			img2pdf $(ls -v ${image_dir}/*.jpg) --output "${pdf_dir}"
+		if [[ -n "${pdf_imgsize}" ]]; then # imgsize option used
+			if [[ "${python_cmd_prefix}" == "true" ]]; then
+				python3 -m img2pdf --imgsize ${pdf_imgsize} $(ls -v ${image_dir}/*.jpg) --output "${pdf_dir}"
+			else
+				img2pdf --imgsize ${pdf_imgsize} $(ls -v ${image_dir}/*.jpg) --output "${pdf_dir}"
+			fi
+		else # imgsize option not used
+			if [[ "${python_cmd_prefix}" == "true" ]]; then
+				python3 -m img2pdf $(ls -v ${image_dir}/*.jpg) --output "${pdf_dir}"
+			else
+				img2pdf $(ls -v ${image_dir}/*.jpg) --output "${pdf_dir}"
+			fi
 		fi
+
 
 		rm -r "${image_dir:?}/"
 		clear
@@ -491,6 +502,12 @@ while [[ "${1}" ]]; do
 			;;
 		-f|--fullscreen)
 			zathura_auto_fullscreen=true
+			;;
+		-vv|--vertical)
+			pdf_imgsize="A4"
+			;;
+		-hh|--horisontal)
+			pdf_imgsize="A4^T"
 			;;
 		-l|--last-session)
 			open_last_session=true
