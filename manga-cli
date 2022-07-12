@@ -3,7 +3,12 @@
 version="1.0.5"
 old_ifs="${IFS}"
 cache_dir="${HOME}/.cache/manga-cli"
-dependencies=("ls" "cat" "curl" "sed" "awk" "tr" "du" "rm" "mkdir" "git" "diff" "patch" "img2pdf" "zathura")
+
+base_dependencies=("ls" "cat" "curl" "sed" "awk" "tr" "du" "rm" "mkdir")
+pdf_dependencies=("img2pdf")
+read_dependencies=("zathura")
+update_dependencies=("diff" "patch")
+
 github_source="https://raw.githubusercontent.com/7USTIN/manga-cli/master/manga-cli"
 
 # Text colors
@@ -64,6 +69,9 @@ show_help() {
 	  -l, --last-session	Open last session
 	  -c, --cache-size	Print cache size (${cache_dir})
 	  -C, --clear-cache	Clear cache (${cache_dir})
+	  -d, --download cache  Downloads the manga. Doesn't tries to read it
+	  -i, --image-output    Saves the manga as image without converting to pdf
+	  -r, --reader COMMAND  Runs COMMAND with the path to the pdf/images when trying to read the manga
 
 	EOF
 }
@@ -72,7 +80,19 @@ show_version() {
 	print_green "Version: ${version}"
 }
 
-open_pdf() { # Open PDF using Zathura and run it in the background
+open_pdf() { 
+	if [[ -n "${reader}" ]]; then
+		if [[ -f "${pdf_dir}" ]]; then 
+			eval "${reader} ${pdf_dir}"
+		else
+			local offset=$(("${#image_dir}"+2)) # +1 from / and +1 due to 1-indexing
+			eval "${reader} $(ls ${image_dir}/*.jpg | sort -n -k 1.$offset | xargs )"
+		fi
+
+		return $?
+	fi
+
+	# Fallback to Zathura
 	if [[ "${zathura_auto_fullscreen}" == "true" ]]; then
 		zathura --page=1 --mode="fullscreen" "${pdf_dir}" &
 	else
@@ -310,12 +330,18 @@ scrape_chapter() {
 		for image_src in "${chapter_image_urls[@]}"; do
 			((i=i + 1))
 
+			local image_name="${image_dir}/${i}.jpg" 
+
+			if [[ -f "${image_name}" ]]; then 
+				continue
+			fi
+
 			# Download image in the background
 			curl \
 				--silent \
 				--create-dirs \
 				--header 'Referer: https://readmanganato.com/' \
-				--output "${image_dir}/${i}.jpg" \
+				--output "${image_name}" \
 				"${image_src}" &
 		done
 
@@ -434,12 +460,21 @@ convert_imgs_to_pdf() {
 
 open_chapter() {
 	scrape_chapter
-	convert_imgs_to_pdf
+
+	if [[ "${pdf_output}" == "true" ]]; then
+		convert_imgs_to_pdf
+	fi
+
+	if [[ "${download_only}" == "true" ]]; then
+		return 
+	fi
+
 	open_pdf
 	cache_session
 }
 
 check_dependencies() {
+	local dependencies=("$@")
 	for dependency in "${dependencies[@]}"; do
 		if ! command -v "${dependency}" &> /dev/null; then
 			if ! pip3 show "${dependency}" &> /dev/null; then
@@ -463,7 +498,7 @@ check_dependencies() {
 # Call 'reset_ifs' function when exiting script
 trap reset_ifs EXIT
 
-check_dependencies
+check_dependencies "${base_dependencies[@]}"
 
 main() {
 	search_manga
@@ -486,6 +521,7 @@ while [[ "${1}" ]]; do
 			exit 0
 			;;
 		-u|--update)
+			check_dependencies "${update_dependencies[@]}"
 			update_script
 			exit 0
 			;;
@@ -504,6 +540,16 @@ while [[ "${1}" ]]; do
 			clear_cache
 			exit 0
 			;;
+		-d|--download)
+			download_only=true
+			;;
+		-i|--image-output)
+			pdf_output=false
+			;;
+		-r|--reader)
+			reader="$2"
+			shift
+			;;
 		*)	
 			show_help
 			exit 1
@@ -512,6 +558,14 @@ while [[ "${1}" ]]; do
 
 	shift
 done
+
+if [[ "${download_only}" != "true" && -z "${reader}" ]]; then
+	check_dependencies "${read_dependencies[@]}"
+fi
+
+if [[ "${pdf_output}" != "false" ]]; then
+	check_dependencies "${pdf_dependencies[@]}"
+fi
 
 if [[ "${open_last_session}" == "true" ]]; then
 	open_chapter
